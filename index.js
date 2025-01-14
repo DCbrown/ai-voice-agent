@@ -113,7 +113,7 @@ fastify.register(async (fastify) => {
     sessions.set(sessionId, session);
 
     // Create VAPI WebSocket connection when a client connects
-    const vapiWs = new WebSocket("wss://api.vapi.ai/streaming/v1", {
+    const vapiWs = new WebSocket("wss://gateway.vapi.ai/ws", {
       headers: {
         Authorization: `Bearer ${VAPI_API_KEY}`,
         "Content-Type": "application/json",
@@ -130,6 +130,7 @@ fastify.register(async (fastify) => {
           audio: {
             encoding: "mulaw",
             sampleRate: 8000,
+            channels: 1,
           },
           voice: {
             type: VOICE,
@@ -137,6 +138,7 @@ fastify.register(async (fastify) => {
           assistant: {
             prompt: SYSTEM_MESSAGE,
             temperature: 0.8,
+            model: "gpt-4",
           },
         },
       };
