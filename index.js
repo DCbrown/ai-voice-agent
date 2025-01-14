@@ -113,11 +113,10 @@ fastify.register(async (fastify) => {
     sessions.set(sessionId, session);
 
     // Create VAPI WebSocket connection when a client connects
-    const vapiWs = new WebSocket("wss://api.vapi.ai/api/v1/audio/streams", {
+    const vapiWs = new WebSocket("wss://api.vapi.ai/streaming/v1", {
       headers: {
         Authorization: `Bearer ${VAPI_API_KEY}`,
         "Content-Type": "application/json",
-        "vapi-version": "2024-01-01",
       },
     });
 
@@ -126,7 +125,7 @@ fastify.register(async (fastify) => {
       console.log("Connected to VAPI WebSocket");
 
       const sessionUpdate = {
-        type: "session.init",
+        type: "start",
         config: {
           audio: {
             encoding: "mulaw",
@@ -136,7 +135,7 @@ fastify.register(async (fastify) => {
             type: VOICE,
           },
           assistant: {
-            instructions: SYSTEM_MESSAGE,
+            prompt: SYSTEM_MESSAGE,
             temperature: 0.8,
           },
         },
