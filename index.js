@@ -19,6 +19,9 @@ console.log(
   "VAPI API Key length:",
   VAPI_API_KEY ? VAPI_API_KEY.length : "not set"
 );
+console.log("Server starting with configuration:");
+console.log("- PORT:", PORT);
+console.log("- VOICE:", VOICE);
 
 // Initialize Fastify
 const fastify = Fastify();
@@ -109,6 +112,7 @@ fastify.register(async (fastify) => {
     };
     sessions.set(sessionId, session);
 
+    // Create VAPI WebSocket connection when a client connects
     const vapiWs = new WebSocket("wss://api.vapi.ai/api/v1/audio/streams", {
       headers: {
         Authorization: `Bearer ${VAPI_API_KEY}`,
@@ -117,7 +121,10 @@ fastify.register(async (fastify) => {
       },
     });
 
-    const initializeSession = () => {
+    // Initialize session once VAPI WebSocket is open
+    vapiWs.on("open", () => {
+      console.log("Connected to VAPI WebSocket");
+
       const sessionUpdate = {
         type: "session.init",
         config: {
@@ -137,37 +144,13 @@ fastify.register(async (fastify) => {
 
       console.log("Sending session update:", JSON.stringify(sessionUpdate));
       vapiWs.send(JSON.stringify(sessionUpdate));
-    };
-
-    // Send initial conversation item if AI talks first
-    const sendInitialConversationItem = () => {
-      const initialConversationItem = {
-        type: "conversation.item.create",
-        item: {
-          type: "message",
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: "Greet the user with “Hi, this is The Codebender. How can I help?”",
-            },
-          ],
-        },
-      };
-      openAiWs.send(JSON.stringify(initialConversationItem));
-      openAiWs.send(JSON.stringify({ type: "response.create" }));
-    };
-
-    // Open event for OpenAI WebSocket
-    openAiWs.on("open", () => {
-      console.log("Connected to the OpenAI Realtime API");
-      setTimeout(initializeSession, 100); // Ensure connection stability, send after a second
     });
 
-    // Listen for messages from the OpenAI WebSocket
-    openAiWs.on("message", (data) => {
+    // Handle VAPI WebSocket messages
+    vapiWs.on("message", (data) => {
       try {
         const response = JSON.parse(data);
+        console.log("Received VAPI message type:", response.type);
 
         switch (response.type) {
           case "transcript":
@@ -188,7 +171,7 @@ fastify.register(async (fastify) => {
               streamSid: session.streamSid,
               media: { payload: response.chunk },
             };
-            connection.send(JSON.stringify(audioDelta));
+            connection.socket.send(JSON.stringify(audioDelta));
             break;
 
           case "error":
@@ -205,8 +188,8 @@ fastify.register(async (fastify) => {
       }
     });
 
-    // Handle incoming messages from Twilio
-    connection.on("message", (message) => {
+    // Handle incoming Twilio WebSocket messages
+    connection.socket.on("message", (message) => {
       try {
         const data = JSON.parse(message);
 
@@ -222,7 +205,7 @@ fastify.register(async (fastify) => {
             break;
           case "start":
             session.streamSid = data.start.streamSid;
-            console.log("Incoming stream has started", session.streamSid);
+            console.log("Incoming stream started:", session.streamSid);
             break;
           default:
             console.log("Received non-media event:", data.event);
@@ -233,27 +216,27 @@ fastify.register(async (fastify) => {
       }
     });
 
-    // Handle connection close and log transcript
-    connection.on("close", async () => {
-      if (vapiWs.readyState === WebSocket.OPEN) vapiWs.close();
-      console.log(`Client disconnected (${sessionId}).`);
+    // Handle WebSocket close and errors
+    vapiWs.on("close", (code, reason) => {
+      console.log("VAPI WebSocket closed with code:", code, "reason:", reason);
+    });
+
+    vapiWs.on("error", (error) => {
+      console.error("VAPI WebSocket Error:", error);
+    });
+
+    // Clean up on connection close
+    connection.socket.on("close", async () => {
+      if (vapiWs.readyState === WebSocket.OPEN) {
+        vapiWs.close();
+      }
+      console.log(`Client disconnected (${sessionId})`);
       session.transcript = cleanTranscript(session.transcript);
       console.log("Full Transcript:");
       console.log(session.transcript);
 
-      await processTranscriptAndSend(session.transcript, sessionId);
-
       // Clean up the session
       sessions.delete(sessionId);
-    });
-
-    // Handle WebSocket close and errors
-    vapiWs.on("close", (code, reason) => {
-      console.log("WebSocket closed with code:", code, "reason:", reason);
-    });
-
-    vapiWs.on("error", (error) => {
-      console.error("WebSocket Error:", error);
     });
   });
 });
