@@ -19,9 +19,6 @@ console.log(
   "VAPI API Key length:",
   VAPI_API_KEY ? VAPI_API_KEY.length : "not set"
 );
-console.log("Server starting with configuration:");
-console.log("- PORT:", PORT);
-console.log("- VOICE:", VOICE);
 
 // Initialize Fastify
 const fastify = Fastify();
@@ -113,7 +110,7 @@ fastify.register(async (fastify) => {
     sessions.set(sessionId, session);
 
     // Create VAPI WebSocket connection when a client connects
-    const vapiWs = new WebSocket("wss://gateway.vapi.ai/ws", {
+    const vapiWs = new WebSocket("wss://api.vapi.ai/voice/streams", {
       headers: {
         Authorization: `Bearer ${VAPI_API_KEY}`,
         "Content-Type": "application/json",
@@ -222,9 +219,19 @@ fastify.register(async (fastify) => {
       console.log("VAPI WebSocket closed with code:", code, "reason:", reason);
     });
 
+    // Add DNS error handling
     vapiWs.on("error", (error) => {
-      console.error("VAPI WebSocket Error:", error);
+      console.error("WebSocket Error Details:", {
+        message: error.message,
+        code: error.code,
+        errno: error.errno,
+        syscall: error.syscall,
+        hostname: error.hostname,
+      });
     });
+
+    // Add connection status logging
+    console.log("Attempting to connect to VAPI WebSocket...");
 
     // Clean up on connection close
     connection.socket.on("close", async () => {
