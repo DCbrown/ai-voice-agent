@@ -15,6 +15,11 @@ if (!VAPI_API_KEY) {
   process.exit(1);
 }
 
+console.log(
+  "VAPI API Key length:",
+  VAPI_API_KEY ? VAPI_API_KEY.length : "not set"
+);
+
 // Initialize Fastify
 const fastify = Fastify();
 fastify.register(fastifyFormBody);
@@ -104,10 +109,11 @@ fastify.register(async (fastify) => {
     };
     sessions.set(sessionId, session);
 
-    const vapiWs = new WebSocket("wss://api.vapi.ai/ws", {
+    const vapiWs = new WebSocket("wss://api.vapi.ai/api/v1/audio/streams", {
       headers: {
         Authorization: `Bearer ${VAPI_API_KEY}`,
         "Content-Type": "application/json",
+        "vapi-version": "2024-01-01",
       },
     });
 
@@ -116,7 +122,7 @@ fastify.register(async (fastify) => {
         type: "session.init",
         config: {
           audio: {
-            encoding: "g711_ulaw",
+            encoding: "mulaw",
             sampleRate: 8000,
           },
           voice: {
@@ -242,12 +248,12 @@ fastify.register(async (fastify) => {
     });
 
     // Handle WebSocket close and errors
-    vapiWs.on("close", () => {
-      console.log("Disconnected from the VAPI WebSocket");
+    vapiWs.on("close", (code, reason) => {
+      console.log("WebSocket closed with code:", code, "reason:", reason);
     });
 
     vapiWs.on("error", (error) => {
-      console.error("Error in the VAPI WebSocket:", error);
+      console.error("WebSocket Error:", error);
     });
   });
 });
